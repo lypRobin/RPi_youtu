@@ -42,7 +42,7 @@ class Updater():
 			return False
 
 	def check_version(self):
-		with open('gui.config','r') as f:
+		with open(APP_CONFIG_FILE,'r') as f:
 			for line in f.readlines():
 				if 'version=' in line:
 					try:
@@ -50,8 +50,11 @@ class Updater():
 					except:
 						self.cur_version = ''
 
+		print '[Updater] Get current version'
 		try:
 			versions = urllib.urlopen(VERSION_URL).readlines()
+			print '[Updater] Reading new version'
+
 			for line in versions:
 				if 'version=' in line:
 					self.new_version = line.split('=')[1]
@@ -77,6 +80,25 @@ class Updater():
 		except:
 			print '[Updater] Update failed.'
 			return False
+
+		try:
+			if os.path.exists(YOUTU_APP_DIR+'/temp'):
+				shutil.rmtree(YOUTU_APP_DIR+'/temp')
+		except:
+			print '[Updater] Update failed.'
+			return False
+
+		lines = []
+		with open(APP_CONFIG_FILE,'r') as f:
+			i = 0
+			lines = f.readlines()
+			for line in lines:
+				if 'version=' in line:
+					lines[i] = 'version=' + self.new_version
+			i += 1
+
+		with open(APP_CONFIG_FILE, 'w') as f:
+			f.writelines(lines)
 
 		return True
 
@@ -250,12 +272,13 @@ class MyWindow(QMainWindow):
 	def initial(self):
 		self.Pages = {'mainPage':0, \
 					  'optionPage':1, \
-					  'successPage':2, \
-					  'failPage':3, \
-					  'accessPasswordPage':4, \
-					  'adminPasswordPage':5, \
-					  'setIPPage':6, \
-					  'setPasswordPage':7 }
+					  'updatePage':2, \
+					  'successPage':3, \
+					  'failPage':4, \
+					  'accessPasswordPage':5, \
+					  'adminPasswordPage':6, \
+					  'setIPPage':7, \
+					  'setPasswordPage':8 }
 
 		rospy.init_node(self.node_name, anonymous = True)
 		self.pub = rospy.Publisher('message', String, queue_size = 10)
@@ -310,7 +333,6 @@ class MyWindow(QMainWindow):
 		self.pub.publish('enable_show_video')
 		time.sleep(0.1)
 		self.stackedWidget.setCurrentIndex(self.Pages['mainPage'])
-		self.lower()
 
 	def goto_update_page(self):
 		self.stackedWidget.setCurrentIndex(self.Pages['updatePage'])
@@ -319,6 +341,8 @@ class MyWindow(QMainWindow):
 			self.version_info.setText('Please check network')
 			self.operation_state = 'failed'
 			self.timer.start(2000)
+			# time.sleep(2)
+			return
 
 		self.version_info.setText('Checking version...')
 		ret = self.updater.check_version()
@@ -326,10 +350,15 @@ class MyWindow(QMainWindow):
 			self.version_info.setText('The Newest Version')
 			self.operation_state = 'success'
 			self.timer.start(2000)
+			# time.sleep(2)
+			return
+
 		elif ret < 0:
 			self.version_info.setText('Checking Version Failed.')
 			self.operation_state = 'failed'
 			self.timer.start(2000)
+			# time.sleep(2)
+			return
 		else:
 			self.version_info.setText('Updating...')
 
@@ -338,11 +367,13 @@ class MyWindow(QMainWindow):
 			self.version_num.setText('Version: ' + self.updater.get_version())
 			self.operation_state = 'success'
 			time.sleep(2)
-			self.version_info.setText('Please Reboot')
+			self.version_info.setText('Success! Please Reboot')
 		else:
 			self.version_info.setText('Update Failed.')
 			self.operation_state = 'failed'
 			self.timer.start(2000)
+			
+
 
 
 	def goto_accesspw_page(self):

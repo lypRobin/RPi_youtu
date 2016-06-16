@@ -198,7 +198,7 @@
       </layout>
      </widget>
     </widget>
-    <widget class="QWidget" name="update_page">
+    <widget class="QWidget" name="updatePage">
      <widget class="QLabel" name="version_info">
       <property name="geometry">
        <rect>
