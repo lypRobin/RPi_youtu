@@ -4,7 +4,8 @@ from PyQt4.QtCore import *
 from PyQt4 import uic
 import rospy
 from std_msgs.msg import String
-import sys
+import sys, os
+import shutil, urllib
 import time
 
 OPTION_ACCESS_PASSWORD = 0
@@ -17,13 +18,73 @@ ACCESS_PASSWORD_LENGTH = 6
 ADMIN_PASSWORD_LENGTH = 6
 
 TIMER_INTERVAL = 2
-APP_CONFIG_FILE = '/home/pi/Documents/RPi_youtu/app/src/youtu/scripts/gui.config'
+VERSION_URL = 'https://raw.githubusercontent.com/lypRobin/RPi_youtu/master/VERSION'
+YOUTU_APP_DIR = '/home/pi/Documents/RPi_youtu/app/src/youtu/'
+APP_CONFIG_FILE = YOUTU_APP_DIR+'/scripts/gui.config'
+
+
+class Updater():
+	def __init__(self):
+		self.cur_version = ''
+		self.new_version = ''
+
+	def get_version(self):
+		return self.new_version
+
+	def check_network(self):
+		try:
+			ret = os.system('ping www.baidu.com -c 2')
+			if ret:
+				return False
+			else:
+				return True
+		except:
+			return False
+
+	def check_version(self):
+		with open('gui.config','r') as f:
+			for line in f.readlines():
+				if 'version=' in line:
+					try:
+						self.cur_version = line.split('=')[1]
+					except:
+						self.cur_version = ''
+
+		try:
+			versions = urllib.urlopen(VERSION_URL).readlines()
+			for line in versions:
+				if 'version=' in line:
+					self.new_version = line.split('=')[1]
+			if self.new_version != '' and self.cur_version != '':
+				if float(self.new_version) > float(self.cur_version):
+					return 1
+			else:
+				print '[Updater] Version file invalid' 
+				return -2
+		except:
+			print '[Updater] check version failed.'
+			return -1
+
+		print '[Updater] same version'
+		return 0
+
+	def update(self):
+		try:
+			if os.path.exists(YOUTU_APP_DIR+'/temp'):
+				shutil.rmtree(YOUTU_APP_DIR+'/temp')
+			os.system('git clone https://github.com/lypRobin/RPi_youtu.git ' + YOUTU_APP_DIR+'/temp')
+			os.system('cp -r ' + YOUTU_APP_DIR+'/temp/app/* '+ YOUTU_APP_DIR+'/scripts')
+		except:
+			print '[Updater] Update failed.'
+			return False
+
+		return True
 
 
 class MyWindow(QMainWindow):
 	def __init__(self):
 		super(MyWindow, self).__init__()
-		uic.loadUi('/home/pi/Documents/RPi_youtu/app/src/youtu/scripts/gui.ui', self)
+		uic.loadUi(YOUTU_APP_DIR + 'scripts/gui.ui', self)
 
 		# ROS 
 		self.node_name = 'GUI'
@@ -44,9 +105,9 @@ class MyWindow(QMainWindow):
 		self.pw_idx = 0
 		self.timer = QTimer()
 		self.operation_state = ''
-		self.setip_state = ''   # determine set local ip or set host ip
-		self.setpw_state = ''	# determine set access or admin password
-		self.operations = ''    # IC card state to determine which page to change after success or failed.
+		self.options = ''   # determine whick page to enter after get admin authority
+		self.card_state = ''    # IC card state to determine which page to change after success or failed.
+		self.updater = Updater()
 
 		QObject.connect(self.timer, SIGNAL("timeout()"), self.timing)
 		self.addr0_input.installEventFilter(self)
@@ -68,6 +129,7 @@ class MyWindow(QMainWindow):
 		self.set_localip_btn.clicked.connect(lambda: self.goto_adminpw_page('local_ip'))
 		self.set_accesspw_btn.clicked.connect(lambda: self.goto_adminpw_page('access_pw'))
 		self.set_adminpw_btn.clicked.connect(lambda: self.goto_adminpw_page('admin_pw'))
+		self.update_btn.clicked.connect(lambda: self.goto_adminpw_page('update'))
 
 		# Access Password Page
 		self.acc_pw_btn0.clicked.connect(lambda: self.access_pw_input('0'))
@@ -221,23 +283,24 @@ class MyWindow(QMainWindow):
 			self.goto_option_page()
 		elif data.data == 'card_valid':
 			self.goto_success_page()
-			self.operations = 'card_varify'
+			self.card_state = 'card_varify'
 		elif data.data == 'card_invalid':
 			self.goto_failed_page()
-			self.operations == 'card_varify'
+			self.card_state == 'card_varify'
 
 
 	def timing(self):
 		self.timer.stop()
 		if self.operation_state == 'failed':
-			if self.operations == 'card_varify':
+			if self.card_state == 'card_varify':
 				self.goto_main_page()
-				self.operations = ''
+				self.card_state = ''
 			else:
 				self.goto_option_page()
 
 		elif self.operation_state == 'success':
 			self.goto_main_page()
+		self.operation_state = ''
 
 	# Page convertion
 	def goto_option_page(self):
@@ -248,7 +311,39 @@ class MyWindow(QMainWindow):
 		time.sleep(0.1)
 		self.stackedWidget.setCurrentIndex(self.Pages['mainPage'])
 		self.lower()
-		
+
+	def goto_update_page(self):
+		self.stackedWidget.setCurrentIndex(self.Pages['updatePage'])
+		self.version_info.setText('Checking network...')
+		if not self.updater.check_network():
+			self.version_info.setText('Please check network')
+			self.operation_state = 'failed'
+			self.timer.start(2000)
+
+		self.version_info.setText('Checking version...')
+		ret = self.updater.check_version()
+		if ret == 0:
+			self.version_info.setText('The Newest Version')
+			self.operation_state = 'success'
+			self.timer.start(2000)
+		elif ret < 0:
+			self.version_info.setText('Checking Version Failed.')
+			self.operation_state = 'failed'
+			self.timer.start(2000)
+		else:
+			self.version_info.setText('Updating...')
+
+		if self.updater.update():
+			self.version_info.setText('Update Success!')
+			self.version_num.setText('Version: ' + self.updater.get_version())
+			self.operation_state = 'success'
+			time.sleep(2)
+			self.version_info.setText('Please Reboot')
+		else:
+			self.version_info.setText('Update Failed.')
+			self.operation_state = 'failed'
+			self.timer.start(2000)
+
 
 	def goto_accesspw_page(self):
 		self.acc_pw_input.setAlignment(Qt.AlignCenter)
@@ -266,22 +361,24 @@ class MyWindow(QMainWindow):
 
 	def goto_adminpw_page(self, option):
 		if 'ip' in option:
-			self.setip_state = option
+			self.options = option
 		elif 'pw' in option:
-			self.setpw_state = option
+			self.options = option
+		elif 'update' in option:
+			self.options = option
 
 		self.stackedWidget.setCurrentIndex(self.Pages['adminPasswordPage'])
 
 	def goto_setip_page(self):
 		
 		with open(APP_CONFIG_FILE,'r') as f:
-			if self.setip_state == 'host_ip':
+			if self.options == 'host_ip':
 				for line in f.readlines():
 					if 'host_ip' in line:
 						ip = line.split('=')[1].strip()
 						self.addr = ip.split('.')
 				self.set_ip_label.setText('set host ip')
-			elif self.setip_state == 'local_ip':
+			elif self.options == 'local_ip':
 				for line in f.readlines():
 					if 'local_ip' in line:
 						ip = line.split('=')[1].strip()
@@ -296,9 +393,9 @@ class MyWindow(QMainWindow):
 
 	def goto_setpw_page(self):
 		
-		if self.setpw_state == 'access_pw':
+		if self.options == 'access_pw':
 			self.set_pw_label.setText('Set Access Password')
-		elif self.setpw_state == 'admin_pw':
+		elif self.options == 'admin_pw':
 			self.set_pw_label.setText('Set Admin Password')
 			
 		self.pw_idx = 0		
@@ -374,10 +471,12 @@ class MyWindow(QMainWindow):
 
 		if self.admin_password == pw and len(pw) == ADMIN_PASSWORD_LENGTH:
 			self.admin_pw_reset()
-			if self.setip_state != '':
+			if self.options == 'host_ip' or self.options == 'local_ip':
 				self.goto_setip_page()
-			elif self.setpw_state != '':
+			elif self.options == 'access_pw' or self.options == 'admin_pw':
 				self.goto_setpw_page()
+			elif self.options == 'update':
+				self.goto_update_page()
 		else:
 			self.admin_pw_reset()
 			self.goto_failed_page()
@@ -428,10 +527,10 @@ class MyWindow(QMainWindow):
 			i = 0
 			lines = f.readlines()
 			for line in lines:
-				if self.setip_state == 'host_ip':
+				if self.options == 'host_ip':
 					if 'host_ip' in line:
 						lines[i] = 'host_ip='+self.addr[0]+'.'+self.addr[1]+'.'+self.addr[2]+'.'+self.addr[3]+'\n'
-				elif self.setip_state == 'local_ip':
+				elif self.options == 'local_ip':
 					if 'local_ip' in line:
 						lines[i] = 'local_ip='+self.addr[0]+'.'+self.addr[1]+'.'+self.addr[2]+'.'+self.addr[3]+'\n'
 				i += 1
@@ -441,24 +540,24 @@ class MyWindow(QMainWindow):
 
 		self.addr = ['','','','']
 		self.ip_input_update()
-		self.setip_state = ''
+		self.options = ''
 		self.goto_option_page()
 
 	def set_ip_cancel(self):
 		self.addr = ['','','','']
 		self.ip_input_update()
-		self.setip_state = ''
+		self.options = ''
 		self.goto_option_page()
 
 	# Set New Password Page
 	def set_pw_input(self, input):
 		self.pw_input0.setStyleSheet(".QTextEdit {background-color: rgb(255, 255, 255)}")
 		self.pw_input1.setStyleSheet(".QTextEdit {background-color: rgb(255, 255, 255)}")
-		if self.setpw_state == 'access_pw':
+		if self.options == 'access_pw':
 			if len(self.new_pw[self.pw_idx]) < ACCESS_PASSWORD_LENGTH:
 				self.new_pw[self.pw_idx] += input
 
-		elif self.setpw_state == 'admin_pw':
+		elif self.options == 'admin_pw':
 			if len(self.new_pw[self.pw_idx]) < ADMIN_PASSWORD_LENGTH:
 				self.new_pw[self.pw_idx] += input
 
@@ -481,7 +580,7 @@ class MyWindow(QMainWindow):
 		self.pw_input1.setText('')
 
 	def set_pw_ok(self):
-		if self.setpw_state == 'access_pw':
+		if self.options == 'access_pw':
 			if self.new_pw[0] == self.new_pw[1] and len(self.new_pw[0]) == ACCESS_PASSWORD_LENGTH:
 				lines = []
 				with open(APP_CONFIG_FILE, 'r') as f:
@@ -498,7 +597,7 @@ class MyWindow(QMainWindow):
 				self.pw_input0.setStyleSheet(".QTextEdit {background-color: rgb(255, 0, 0)}")
 				self.pw_input1.setStyleSheet(".QTextEdit {background-color: rgb(255, 0, 0)}")
 				return
-		if self.setpw_state == 'admin_pw':
+		if self.options == 'admin_pw':
 			if self.new_pw[0] == self.new_pw[1] and len(self.new_pw[0]) == ADMIN_PASSWORD_LENGTH:
 				lines = []
 				with open(APP_CONFIG_FILE, 'r') as f:
@@ -520,7 +619,7 @@ class MyWindow(QMainWindow):
 		self.pw_input0.setText('')
 		self.pw_input1.setText('')
 		self.pw_idx = 0
-		self.setpw_state = ''
+		self.options = ''
 		self.goto_option_page()		
 
 	def set_pw_cancel(self):
@@ -528,7 +627,7 @@ class MyWindow(QMainWindow):
 		self.pw_input0.setText('')
 		self.pw_input1.setText('')
 		self.pw_idx = 0
-		self.setpw_state = ''
+		self.options = ''
 		self.goto_option_page()
 
 

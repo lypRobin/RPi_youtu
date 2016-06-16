@@ -30,6 +30,7 @@ class Camera():
 		if data.data == 'distance_ok':
 			if self.enable_show:
 				self.start_time = time.time()
+				print '[Camera] camera catch distance ok'
 				self.enable_read = True
 		elif data.data == 'enable_show_video':
 			self.enable_show = True
@@ -54,11 +55,11 @@ class Camera():
 	def run(self):
 		while not rospy.is_shutdown():
 			cv2.waitKey(30)
-			print 'Camera node still working...'
+			print '[Camera] Camera node still working...'
 			if self.enable_read:
 				t = time.time() - self.start_time
-				print 'Enable read image.'
-				print 'Start time: ' + str(self.start_time) + ', Current time: ' + str(time.time())
+				print '[Camera] Enable read image.'
+				# print 'Start time: ' + str(self.start_time) + ', Current time: ' + str(time.time())
 				if t < SHOW_VIDEO_DELAY and t > 0:
 					if self.cap.isOpened():
 						pass
@@ -66,7 +67,7 @@ class Camera():
 						try:
 							self.cap.open(self.dev)
 							if not self.cap.isOpened():
-								print 'Open camera failed.'
+								print '[Camera] Open camera failed.'
 								# return
 							else:
 								# self.cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 1024)
@@ -75,7 +76,7 @@ class Camera():
 								self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1024)
 								self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 						except:
-							print 'open camera failed, return!'
+							print '[Camera] open camera failed, return!'
 							return
 
 					ret, img = self.cap.read()
@@ -103,12 +104,14 @@ class Camera():
 					cv2.setMouseCallback(self.window, self.mouse_click_callback)
 					# cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, cv2.cv.CV_WINDOW_FULLSCREEN)  # opencv 2.4
 					cv2.imshow(self.window, img_show)
-					
-					screen = wnck.screen_get_default()
-					screen.force_update()
-					for s in screen.get_windows():
-						if s.get_name().find(self.window) != -1:
-							s.activate(0)
+					try:
+						screen = wnck.screen_get_default()
+						screen.force_update()
+						for s in screen.get_windows():
+							if s.get_name().find(self.window) != -1:
+								s.activate(0)
+					except:
+						print '[Camera] activate screen exception'
 				else:
 					time.sleep(0.01)
 					if self.cap.isOpened():
@@ -116,13 +119,13 @@ class Camera():
 						self.start_time = 0.0
 						self.enable_read = False
 						cv2.destroyWindow(self.window)
-						print 'time up stop show image'
+					print '[Camera] time up stop show image'
 			else:
 				if self.cap.isOpened():
 					self.cap.release()
 					self.start_time = 0.0
 					cv2.destroyWindow(self.window)
-					print 'disable read stop show image'
+				print '[Camera] disable read stop show image'
 
 
 		try:
@@ -130,7 +133,7 @@ class Camera():
 				self.cap.release()
 				self.start_time = 0.0
 				cv2.destroyWindow(self.window)
-				print 'stop show image'
+				print '[Camera] stop show image'
 
 		except:
 			return
@@ -138,6 +141,6 @@ class Camera():
 if __name__ == '__main__':
 	cam = Camera(CAMERA_DEV)
 	if not cam.initial():
-		print "fail initial"
+		print "[Camera] fail initial"
 	else:
 		cam.run()
