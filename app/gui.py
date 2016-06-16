@@ -20,7 +20,7 @@ ADMIN_PASSWORD_LENGTH = 6
 TIMER_INTERVAL = 2
 VERSION_URL = 'https://raw.githubusercontent.com/lypRobin/RPi_youtu/master/VERSION'
 YOUTU_APP_DIR = '/home/pi/Documents/RPi_youtu/app/src/youtu/'
-APP_CONFIG_FILE = YOUTU_APP_DIR+'/scripts/gui.config'
+APP_CONFIG_FILE = YOUTU_APP_DIR+'config/gui.config'
 
 
 class Updater():
@@ -95,7 +95,7 @@ class Updater():
 			for line in lines:
 				if 'version=' in line:
 					lines[i] = 'version=' + self.new_version
-			i += 1
+				i += 1
 
 		with open(APP_CONFIG_FILE, 'w') as f:
 			f.writelines(lines)
@@ -126,12 +126,15 @@ class MyWindow(QMainWindow):
 		self.new_pw = ['','']
 		self.pw_idx = 0
 		self.timer = QTimer()
+		self.update_timer = QTimer()
 		self.operation_state = ''
 		self.options = ''   # determine whick page to enter after get admin authority
 		self.card_state = ''    # IC card state to determine which page to change after success or failed.
 		self.updater = Updater()
 
 		QObject.connect(self.timer, SIGNAL("timeout()"), self.timing)
+		QObject.connect(self.update_timer, SIGNAL("timeout()"), self.update_timing)
+
 		self.addr0_input.installEventFilter(self)
 		self.addr1_input.installEventFilter(self)
 		self.addr2_input.installEventFilter(self)
@@ -325,6 +328,46 @@ class MyWindow(QMainWindow):
 			self.goto_main_page()
 		self.operation_state = ''
 
+	def update_timing(self):
+		self.update_timer.stop()
+		need_update = True
+		self.version_info.setText('Checking network...')
+		if not self.updater.check_network():
+			self.version_info.setText('Please check network')
+			self.operation_state = 'failed'
+			self.timer.start(2000)
+			need_update = False
+
+		self.version_info.setText('Checking version...')
+		ret = self.updater.check_version()
+		if ret == 0:
+			self.version_info.setText('The Newest Version')
+			self.version_num.setText('Version: ' + self.updater.get_version())
+			self.operation_state = 'success'
+			self.timer.start(2000)
+			need_update = False
+
+		elif ret < 0:
+			self.version_info.setText('Checking Version Failed.')
+			self.operation_state = 'failed'
+			self.timer.start(2000)
+			need_update = False
+		else:
+			self.version_info.setText('Updating...')
+
+		if need_update:
+			if self.updater.update():
+				self.version_info.setText('Update Success!')
+				self.version_num.setText('Version: ' + self.updater.get_version())
+				self.operation_state = 'success'
+				time.sleep(2)
+				self.version_info.setText('Success! Please Reboot')
+			else:
+				self.version_info.setText('Update Failed.')
+				self.operation_state = 'failed'
+				self.timer.start(2000)
+			
+
 	# Page convertion
 	def goto_option_page(self):
 		self.stackedWidget.setCurrentIndex(self.Pages['optionPage'])
@@ -336,45 +379,8 @@ class MyWindow(QMainWindow):
 
 	def goto_update_page(self):
 		self.stackedWidget.setCurrentIndex(self.Pages['updatePage'])
-		self.version_info.setText('Checking network...')
-		if not self.updater.check_network():
-			self.version_info.setText('Please check network')
-			self.operation_state = 'failed'
-			self.timer.start(2000)
-			# time.sleep(2)
-			return
-
-		self.version_info.setText('Checking version...')
-		ret = self.updater.check_version()
-		if ret == 0:
-			self.version_info.setText('The Newest Version')
-			self.operation_state = 'success'
-			self.timer.start(2000)
-			# time.sleep(2)
-			return
-
-		elif ret < 0:
-			self.version_info.setText('Checking Version Failed.')
-			self.operation_state = 'failed'
-			self.timer.start(2000)
-			# time.sleep(2)
-			return
-		else:
-			self.version_info.setText('Updating...')
-
-		if self.updater.update():
-			self.version_info.setText('Update Success!')
-			self.version_num.setText('Version: ' + self.updater.get_version())
-			self.operation_state = 'success'
-			time.sleep(2)
-			self.version_info.setText('Success! Please Reboot')
-		else:
-			self.version_info.setText('Update Failed.')
-			self.operation_state = 'failed'
-			self.timer.start(2000)
-			
-
-
+		self.update_timer.start(100)
+		
 
 	def goto_accesspw_page(self):
 		self.acc_pw_input.setAlignment(Qt.AlignCenter)

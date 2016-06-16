@@ -214,7 +214,7 @@
        </font>
       </property>
       <property name="text">
-       <string>软件更新</string>
+       <string>更新中......</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
