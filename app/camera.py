@@ -53,6 +53,7 @@ class Camera():
 		return True
 
 	def run(self):
+		is_win_create = False
 		while not rospy.is_shutdown():
 			cv2.waitKey(30)
 			print '[Camera] Camera node still working...'
@@ -98,20 +99,31 @@ class Camera():
 					print "Y average is: " + str(y_avr)
 					if y_avr < 10.0:
 						self.pub.publish('light_on')
+					# try:
+						# cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
+						# cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)	#opencv3.0
+						# cv2.setMouseCallback(self.window, self.mouse_click_callback)
+						# # cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, cv2.cv.CV_WINDOW_FULLSCREEN)  # opencv 2.4
+						# cv2.imshow(self.window, img_show)
 
-					cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
-					cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)	#opencv3.0
-					cv2.setMouseCallback(self.window, self.mouse_click_callback)
-					# cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, cv2.cv.CV_WINDOW_FULLSCREEN)  # opencv 2.4
+					if not is_win_create:
+						cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
+						cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+						cv2.setMouseCallback(self.window, self.mouse_click_callback)
+						is_win_create = True
+
 					cv2.imshow(self.window, img_show)
-					try:
-						screen = wnck.screen_get_default()
-						screen.force_update()
-						for s in screen.get_windows():
-							if s.get_name().find(self.window) != -1:
+
+					screen = wnck.screen_get_default()
+					screen.force_update()
+					for s in screen.get_windows():
+						if s.get_name().find(self.window) != -1:
+							if not s.is_active():
 								s.activate(0)
-					except:
-						print '[Camera] activate screen exception'
+							
+						
+					# except:
+					# 	print '[Camera] show image exception'
 				else:
 					time.sleep(0.01)
 					if self.cap.isOpened():
@@ -119,12 +131,14 @@ class Camera():
 						self.start_time = 0.0
 						self.enable_read = False
 						cv2.destroyWindow(self.window)
+						is_win_create = False
 					print '[Camera] time up stop show image'
 			else:
 				if self.cap.isOpened():
 					self.cap.release()
 					self.start_time = 0.0
 					cv2.destroyWindow(self.window)
+					is_win_create = False
 				print '[Camera] disable read stop show image'
 
 
@@ -133,6 +147,7 @@ class Camera():
 				self.cap.release()
 				self.start_time = 0.0
 				cv2.destroyWindow(self.window)
+				is_win_create = False
 				print '[Camera] stop show image'
 
 		except:
