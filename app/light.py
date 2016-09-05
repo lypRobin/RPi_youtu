@@ -1,4 +1,21 @@
 #!/usr/bin/env python
+#
+# Copyright (c) 2016, Yanpeng Li <lyp40293@gmail.com>.
+# All rights reserved.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
 
 import RPi.GPIO as GPIO
 import rospy
@@ -8,7 +25,7 @@ import time
 
 LIGHT = 13   # GPIO13  pin33
 LIGHT_TIME_INTERVAL = 3  # light for 3 sec
-class Light():
+class Light(object):
 	def __init__(self, pin):
 		self.light = pin
 		self.sub = None
@@ -29,8 +46,8 @@ class Light():
 		GPIO.setup(self.light, GPIO.OUT)
 		self.light_off()
 
-		self.sub = rospy.init_node(self.node_name, anonymous = True)
-		rospy.Subscriber('message', String, self.listening_callback)
+		rospy.init_node(self.node_name, anonymous = True)
+		self.sub = rospy.Subscriber('message', String, self.listening_callback)
 
 	def light_on(self):
 		GPIO.output(self.light, True)

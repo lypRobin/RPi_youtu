@@ -1,4 +1,21 @@
 #!/usr/bin/env python
+#
+# Copyright (c) 2016, Yanpeng Li <lyp40293@gmail.com>.
+# All rights reserved.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
 
 import cv2
 import numpy as np
@@ -14,7 +31,7 @@ SHOW_VIDEO_DELAY = 3.0  #  delay 3 seconds when stop catching sonar distance cal
 AVERAGE_Y_POINTS = 100  #  Randomly choose points to calculate average Y value
 
 
-class Camera():
+class Camera(object):
 	def __init__(self, dev):
 		self.dev = dev
 		self.node_name = 'Camera'
@@ -25,6 +42,7 @@ class Camera():
 		self.enable_read = False
 		self.enable_show = True
 		self.start_time = 0.0
+		self.image_lock = False
 
 	def node_callback(self, data):
 		if data.data == 'distance_ok':
@@ -36,6 +54,13 @@ class Camera():
 			self.enable_show = True
 		elif data.data == 'card_valid' or data.data == 'card_invalid':
 			self.enable_show = False
+		elif data.data == 'image_lock':
+			self.image_lock = True
+		elif data.data == 'image_unlock' or data.data == 'person_id_null':
+			self.image_lock = False
+		elif data.data == 'validperson_liyanpeng':
+			self.enable_show = False
+			self.enable_read = False
 
 
 	def mouse_click_callback(self, event, x, y, flags, param):
@@ -54,13 +79,14 @@ class Camera():
 
 	def run(self):
 		is_win_create = False
+		frame_cnt = 0
+
 		while not rospy.is_shutdown():
 			cv2.waitKey(30)
 			print '[Camera] Camera node still working...'
 			if self.enable_read:
 				t = time.time() - self.start_time
 				print '[Camera] Enable read image.'
-				# print 'Start time: ' + str(self.start_time) + ', Current time: ' + str(time.time())
 				if t < SHOW_VIDEO_DELAY and t > 0:
 					if self.cap.isOpened():
 						pass
@@ -69,11 +95,8 @@ class Camera():
 							self.cap.open(self.dev)
 							if not self.cap.isOpened():
 								print '[Camera] Open camera failed.'
-								# return
+								return
 							else:
-								# self.cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 1024)
-								# self.cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 720)
-
 								self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1024)
 								self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 						except:
@@ -83,6 +106,16 @@ class Camera():
 					ret, img = self.cap.read()
 					print 'Image read from camera!'
 					img = cv2.flip(img, 1)
+
+
+					frame_cnt += 1
+					if frame_cnt % 30 == 0:
+						# store_img = img[:, 242:540]
+						cv2.imwrite('./image.jpg', img[:, 242:782])
+						# cv2.imwrite('./image.jpg', img)
+						time.sleep(0.01)
+						self.pub.publish('trans')
+					
 					h, w = img.shape[:2]
 					res = cv2.resize(img, None, fx = 0.44, fy = 0.44, interpolation = cv2.INTER_CUBIC)  # scaled 720p image to a 320 height image
 					img_show = res[0:320, 107:347]			# split the 320 height image to 240 width
@@ -99,12 +132,6 @@ class Camera():
 					print "Y average is: " + str(y_avr)
 					if y_avr < 10.0:
 						self.pub.publish('light_on')
-					# try:
-						# cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
-						# cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)	#opencv3.0
-						# cv2.setMouseCallback(self.window, self.mouse_click_callback)
-						# # cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, cv2.cv.CV_WINDOW_FULLSCREEN)  # opencv 2.4
-						# cv2.imshow(self.window, img_show)
 
 					if not is_win_create:
 						cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
@@ -120,12 +147,9 @@ class Camera():
 						if s.get_name().find(self.window) != -1:
 							if not s.is_active():
 								s.activate(0)
-							
-						
-					# except:
-					# 	print '[Camera] show image exception'
 				else:
 					time.sleep(0.01)
+					frame_cnt = 0
 					if self.cap.isOpened():
 						self.cap.release()
 						self.start_time = 0.0
@@ -134,6 +158,7 @@ class Camera():
 						is_win_create = False
 					print '[Camera] time up stop show image'
 			else:
+				frame_cnt = 0
 				if self.cap.isOpened():
 					self.cap.release()
 					self.start_time = 0.0
@@ -143,6 +168,7 @@ class Camera():
 
 
 		try:
+			frame_cnt = 0
 			if self.cap.isOpened():
 				self.cap.release()
 				self.start_time = 0.0

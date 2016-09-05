@@ -1,4 +1,22 @@
 #!/usr/bin/env python
+#
+# Copyright (c) 2016, Yanpeng Li <lyp40293@gmail.com>.
+# All rights reserved.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 from PyQt4 import uic
@@ -23,7 +41,7 @@ YOUTU_APP_DIR = '/home/pi/Documents/RPi_youtu/app/src/youtu/'
 APP_CONFIG_FILE = YOUTU_APP_DIR+'config/gui.config'
 
 
-class Updater():
+class Updater(object):
 	def __init__(self):
 		self.cur_version = ''
 		self.new_version = ''
@@ -284,7 +302,7 @@ class MyWindow(QMainWindow):
 					  'setPasswordPage':8 }
 
 		rospy.init_node(self.node_name, anonymous = True)
-		self.pub = rospy.Publisher('message', String, queue_size = 10)
+		self.pub = rospy.Publisher('message', String, queue_size = 20)
 		self.sub = rospy.Subscriber('message', String, self.show_callback)
 		# self.card_sub = rospy.Subscriber('access', String, self.card_access_callback)
 
@@ -310,6 +328,8 @@ class MyWindow(QMainWindow):
 		elif data.data == 'card_valid':
 			self.goto_success_page()
 			self.card_state = 'card_varify'
+		elif data.data == 'validperson_liyanpeng':
+			self.goto_success_page()
 		elif data.data == 'card_invalid':
 			self.goto_failed_page()
 			self.card_state == 'card_varify'
